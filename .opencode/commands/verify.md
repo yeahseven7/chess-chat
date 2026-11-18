@@ -26,11 +26,11 @@ Never:
 
 5. **Unit tests**: `npm run test` (Vitest). Inspect every failure; fix the *cause*, not the assertion.
 
-6. **Browser tests**: `npm run test:e2e` (Playwright, Chromium).
+6. **Production build**: `npm run build`
+
+7. **Browser tests**: `npm run test:e2e` (Playwright, Chromium). Runs after the build — `next start` serves `.next`.
    - The e2e suite resets the local SQLite database per test via `POST /api/dev/seed` (requires `ENABLE_DEV_SEED=true` — already configured in `playwright.config.ts`).
    - If a test fails, inspect `test-results/**/error-context.md` and the `-failed` screenshot before changing anything.
-
-7. **Production build**: `npm run build`
 
 8. **On any failure**:
    - Read the full error, find the root cause in the source.
