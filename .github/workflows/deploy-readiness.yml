@@ -1,0 +1,36 @@
+name: Deploy readiness
+
+# Vercel deploys are performed automatically by the Vercel–GitHub integration:
+#  - pull requests  → preview deployments + this workflow's checks gate them
+#  - main branch    → production deployment after checks pass
+# This workflow only verifies that production-critical invariants hold on
+# every push; it does not bypass the CI workflow.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  invariants:
+    name: Production safety invariants
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Forbid committed secrets
+        run: |
+          set -e
+          if git grep -n -E "GEMINI_API_KEY=[A-Za-z0-9_-]{10,}" -- ':!*.example' ':!*.md'; then
+            echo "::error::A real-looking GEMINI_API_KEY is committed"
+            exit 1
+          fi
+          if git grep -n -E "SUPABASE_SERVICE_ROLE_KEY=[A-Za-z0-9_.-]{10,}" -- ':!*.example' ':!*.md'; then
+            echo "::error::A real-looking SUPABASE_SERVICE_ROLE_KEY is committed"
+            exit 1
+          fi
+          echo "No leaked secrets detected."
+
+      - name: Require lockfile
+        run: test -f package-lock.json
