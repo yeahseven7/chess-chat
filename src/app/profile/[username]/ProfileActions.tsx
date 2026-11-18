@@ -9,12 +9,14 @@ export function ProfileActions({
   targetId,
   targetName,
   friendshipStatus,
+  friendshipDirection,
   friendshipId,
   blocked,
 }: {
   targetId: string;
   targetName: string;
   friendshipStatus: "pending" | "accepted" | "blocked" | null;
+  friendshipDirection: "incoming" | "outgoing" | null;
   friendshipId: string | null;
   blocked: boolean;
 }) {
@@ -108,7 +110,7 @@ export function ProfileActions({
         >
           Remove friend
         </button>
-      ) : status === "pending" ? (
+      ) : status === "pending" && friendshipDirection === "incoming" ? (
         <div className="flex gap-2">
           <button
             disabled={busy}
@@ -129,6 +131,10 @@ export function ProfileActions({
             <X size={16} />
           </button>
         </div>
+      ) : status === "pending" ? (
+        <span className="rounded-lg border border-ink-500 px-3 py-2 text-xs font-semibold text-cream-500">
+          Request sent — pending
+        </span>
       ) : (
         <button
           disabled={busy}

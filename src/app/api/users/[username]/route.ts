@@ -24,6 +24,13 @@ export async function GET(
     stats,
     friendsCount,
     friendshipStatus: friendship?.status ?? null,
+    friendshipDirection: friendship
+      ? friendship.status === "pending"
+        ? friendship.requesterId === user.id
+          ? "outgoing"
+          : "incoming"
+        : null
+      : null,
     friendshipId: friendship?.id ?? null,
     isSelf: profile.id === user.id,
   });

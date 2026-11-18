@@ -78,6 +78,13 @@ export default async function ProfilePage({
               targetId={profile.id}
               targetName={profile.displayName}
               friendshipStatus={friendship?.status ?? null}
+              friendshipDirection={
+                friendship?.status === "pending"
+                  ? friendship.requesterId === me.id
+                    ? "outgoing"
+                    : "incoming"
+                  : null
+              }
               friendshipId={friendship?.id ?? null}
               blocked={blocked}
             />

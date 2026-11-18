@@ -1,5 +1,7 @@
 # ChessChat — AI-reviewed messaging
 
+![CI](https://github.com/yeahseven7/chess-chat/actions/workflows/ci.yml/badge.svg)
+
 ChessChat is a social messaging platform where **every message is automatically analyzed by AI** and assigned exactly one of six chess-review-style reactions — displayed next to the message without any manual action from the author.
 
 | Great `!` | Best `★` | Excellent `👍` | Mistake `?` | Miss `✕` | Blunder `??` |
