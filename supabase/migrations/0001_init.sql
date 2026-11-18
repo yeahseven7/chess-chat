@@ -172,7 +172,7 @@ create table if not exists public.user_settings (
 -- trigger-maintained cache for cheap reporting queries / dashboards.
 create table if not exists public.reaction_statistics (
   scope text not null check (scope in ('conversation','user','global')),
-  scope_id uuid,               -- conversation id / user id; NULL for global
+  scope_id uuid not null default '00000000-0000-0000-0000-000000000000',   -- conversation/user id; sentinel for global
   category text not null check (category in ('great','best','excellent','mistake','miss','blunder')),
   count integer not null default 0,
   updated_at timestamptz not null default now(),
@@ -182,7 +182,7 @@ create table if not exists public.reaction_statistics (
 create or replace function public.refresh_global_reaction_statistics()
 returns void language sql security definer as $$
   insert into public.reaction_statistics (scope, scope_id, category, count, updated_at)
-  select 'global', null, category, count(*), now()
+  select 'global', '00000000-0000-0000-0000-000000000000', category, count(*), now()
   from public.analysis_reactions
   group by category
   on conflict (scope, scope_id, category)
