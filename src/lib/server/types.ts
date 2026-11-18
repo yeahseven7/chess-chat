@@ -3,6 +3,7 @@
 export interface ProfileRow {
   id: string;
   username: string;
+  email: string | null;
   displayName: string;
   bio: string;
   avatarColor: string;
@@ -174,11 +175,13 @@ export interface Store {
   createProfile(input: {
     id: string;
     username: string;
+    email: string | null;
     displayName: string;
     passwordHash: string;
   }): Promise<ProfileRow>;
   getProfileById(id: string): Promise<ProfileRow | null>;
   getProfileByUsername(username: string): Promise<ProfileRow | null>;
+  getProfileByEmail(email: string): Promise<ProfileRow | null>;
   /** Local mode only — returns the password hash for credential verification. */
   getPasswordHash(userId: string): Promise<string | null>;
   updateProfile(

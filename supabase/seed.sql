@@ -2,10 +2,10 @@
 -- Synthetic identities only — do NOT run against a hosted production project.
 -- Passwords are managed by Supabase Auth; these fixture profiles carry no password_hash.
 
-insert into public.profiles (id, username, display_name, bio, avatar_color, created_at, last_seen_at) values
-  ('11111111-1111-1111-1111-111111111111', 'aisha', 'Aisha Bekova', 'Designer. Probably reading.', '#81b64c', now(), now()),
-  ('22222222-2222-2222-2222-222222222222', 'timur', 'Timur Rakhimov', 'Backend engineer. Coffee first.', '#4a9ae8', now(), now()),
-  ('33333333-3333-3333-3333-333333333333', 'dana',  'Dana Sarsenova', 'Product manager.',           '#e8a33d', now(), now())
+insert into public.profiles (id, username, email, display_name, bio, avatar_color, created_at, last_seen_at) values
+  ('11111111-1111-1111-1111-111111111111', 'aisha', 'aisha@chesschat.dev', 'Aisha Bekova', 'Designer. Probably reading.', '#81b64c', now(), now()),
+  ('22222222-2222-2222-2222-222222222222', 'timur', 'timur@chesschat.dev', 'Timur Rakhimov', 'Backend engineer. Coffee first.', '#4a9ae8', now(), now()),
+  ('33333333-3333-3333-3333-333333333333', 'dana',  'dana@chesschat.dev',  'Dana Sarsenova', 'Product manager.',           '#e8a33d', now(), now())
 on conflict (id) do nothing;
 
 insert into public.friendships (id, requester_id, addressee_id, status, created_at, updated_at) values

@@ -11,10 +11,10 @@ export async function resetSeed(request: APIRequestContext): Promise<void> {
   }
 }
 
-/** Log in through the UI. */
-export async function login(page: Page, username: string, password = "password123"): Promise<void> {
+/** Log in through the UI with email + password. */
+export async function login(page: Page, email: string, password = "password123"): Promise<void> {
   await page.goto("/login");
-  await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Password").fill(password);
   await page.locator("form").getByRole("button", { name: "Log in" }).click();
   await page.waitForURL("**/app");

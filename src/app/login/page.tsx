@@ -14,6 +14,7 @@ function AuthForm() {
     searchParams.get("mode") === "register" ? "register" : "login"
   );
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ function AuthForm() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          mode === "register" ? { username, displayName, password } : { username, password }
+          mode === "register" ? { username, displayName, email, password } : { email, password }
         ),
       });
       const data = await res.json().catch(() => ({}));
@@ -127,18 +128,35 @@ function AuthForm() {
           </div>
 
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
+            {mode === "register" && (
+              <div>
+                <label htmlFor="username" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-cream-500">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  autoComplete="username"
+                  required
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="w-full rounded-lg border border-ink-500 bg-ink-700 px-3 py-2.5 text-sm text-cream-100 placeholder-cream-600 outline-none focus:border-accent"
+                  placeholder="e.g. aisha"
+                />
+              </div>
+            )}
             <div>
-              <label htmlFor="username" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-cream-500">
-                Username
+              <label htmlFor="email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-cream-500">
+                Email
               </label>
               <input
-                id="username"
-                autoComplete="username"
+                id="email"
+                type="email"
+                autoComplete="email"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full rounded-lg border border-ink-500 bg-ink-700 px-3 py-2.5 text-sm text-cream-100 placeholder-cream-600 outline-none focus:border-accent"
-                placeholder="e.g. aisha"
+                placeholder="you@example.com"
               />
             </div>
             {mode === "register" && (

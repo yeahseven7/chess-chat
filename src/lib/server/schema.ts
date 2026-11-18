@@ -9,6 +9,7 @@ PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  email TEXT UNIQUE COLLATE NOCASE,
   display_name TEXT NOT NULL,
   bio TEXT NOT NULL DEFAULT '',
   avatar_color TEXT NOT NULL DEFAULT '#81b64c',
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email) WHERE email IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS friendships (
   id TEXT PRIMARY KEY,

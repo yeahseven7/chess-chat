@@ -6,7 +6,7 @@ import { jsonError } from "@/lib/server/http";
 import { rateLimit } from "@/lib/server/rateLimit";
 
 const loginSchema = z.object({
-  username: z.string().min(1).max(64),
+  email: z.string().email().max(160),
   password: z.string().min(1).max(200),
 });
 
@@ -25,12 +25,12 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return jsonError(400, "Invalid input");
 
   const store = getStore();
-  const profile = await store.getProfileByUsername(parsed.data.username);
+  const profile = await store.getProfileByEmail(parsed.data.email.trim().toLowerCase());
   const hash = profile ? await store.getPasswordHash(profile.id) : null;
   // Always run a verification-shaped path to reduce user-enumeration signal.
   const ok = profile && hash ? verifyPassword(parsed.data.password, hash) : false;
   if (!profile || !ok) {
-    return jsonError(401, "Invalid username or password");
+    return jsonError(401, "Invalid email or password");
   }
   await store.touchLastSeen(profile.id);
   await setSessionCookie(profile.id);

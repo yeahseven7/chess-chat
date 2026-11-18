@@ -49,6 +49,7 @@ const emptyCounts = (): CategoryCounts => ({
 const mapProfile = (r: Row): ProfileRow => ({
   id: r.id,
   username: r.username,
+  email: r.email ?? null,
   displayName: r.display_name,
   bio: r.bio ?? "",
   avatarColor: r.avatar_color ?? "#81b64c",
@@ -171,6 +172,7 @@ export class SupabaseStore implements Store {
   async createProfile(input: {
     id: string;
     username: string;
+    email: string | null;
     displayName: string;
     passwordHash: string;
   }): Promise<ProfileRow> {
@@ -180,6 +182,7 @@ export class SupabaseStore implements Store {
         .insert({
           id: input.id,
           username: input.username.trim(),
+          email: input.email?.trim().toLowerCase() ?? null,
           display_name: input.displayName.trim(),
           password_hash: input.passwordHash,
           created_at: now(),
@@ -197,6 +200,11 @@ export class SupabaseStore implements Store {
 
   async getProfileByUsername(username: string): Promise<ProfileRow | null> {
     const { data } = await this.db.from("profiles").select("*").ilike("username", username.trim()).maybeSingle();
+    return data ? mapProfile(data) : null;
+  }
+
+  async getProfileByEmail(email: string): Promise<ProfileRow | null> {
+    const { data } = await this.db.from("profiles").select("*").ilike("email", email.trim().toLowerCase()).maybeSingle();
     return data ? mapProfile(data) : null;
   }
 

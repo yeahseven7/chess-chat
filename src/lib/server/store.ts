@@ -28,7 +28,17 @@ export function getStore(): Store {
     return singleton;
   }
   const dbPath = process.env.LOCAL_DB_PATH ?? path.join(process.cwd(), ".localdata", "chesschat.db");
-  singleton = new LocalStore(dbPath);
+  // Serverless filesystems can be read-only: fall back to in-memory rather than crash.
+  try {
+    singleton = new LocalStore(dbPath);
+  } catch (error) {
+    console.error(
+      `[store] Could not open local database at ${dbPath} (${
+        error instanceof Error ? error.message : String(error)
+      }). Falling back to in-memory storage.`
+    );
+    singleton = new LocalStore(":memory:");
+  }
   return singleton;
 }
 

@@ -80,7 +80,8 @@ Requirements: **Node.js ≥ 22.11** (uses `node:sqlite`) and npm.
 npm install
 cp .env.example .env.local      # then edit values
 npm run dev                     # http://localhost:3000
-# optional fixtures (users aisha/timur/dana, password: password123):
+# optional fixtures (users aisha/timur/dana with password: password123):
+#   aisha@chesschat.dev · timur@chesschat.dev · dana@chesschat.dev
 npm run seed                    # (server must be running, ENABLE_DEV_SEED=true)
 ```
 
@@ -131,6 +132,7 @@ npm run verify        # all of the above, in order
 
 ## Security & privacy
 
+- Registration/login uses email + password (scrypt hash stored server-side, per driver). No third-party identity providers.
 - Passwords hashed with scrypt (local driver); Supabase Auth manages credentials in production.
 - Server-side authorization on every route; RLS policies as the second line of defense.
 - Rate limits on registration, login, sending, requeueing and analysis endpoints.

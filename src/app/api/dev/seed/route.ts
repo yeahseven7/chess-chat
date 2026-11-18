@@ -16,9 +16,9 @@ export const dynamic = "force-dynamic";
  */
 
 const SEED_USERS = [
-  { username: "aisha", displayName: "Aisha Bekova", bio: "Designer. Probably reading.", color: "#81b64c" },
-  { username: "timur", displayName: "Timur Rakhimov", bio: "Backend engineer. Coffee first.", color: "#4a9ae8" },
-  { username: "dana", displayName: "Dana Sarsenova", bio: "Product manager.", color: "#e8a33d" },
+  { username: "aisha", email: "aisha@chesschat.dev", displayName: "Aisha Bekova", bio: "Designer. Probably reading.", color: "#81b64c" },
+  { username: "timur", email: "timur@chesschat.dev", displayName: "Timur Rakhimov", bio: "Backend engineer. Coffee first.", color: "#4a9ae8" },
+  { username: "dana", email: "dana@chesschat.dev", displayName: "Dana Sarsenova", bio: "Product manager.", color: "#e8a33d" },
 ] as const;
 
 export async function POST() {
@@ -47,6 +47,7 @@ export async function POST() {
       await store.createProfile({
         id: randomUUID(),
         username: u.username,
+        email: u.email,
         displayName: u.displayName,
         passwordHash: hashPassword("password123"),
       })
@@ -120,7 +121,7 @@ export async function POST() {
 
   return NextResponse.json({
     ok: true,
-    users: SEED_USERS.map((u) => u.username),
+    users: SEED_USERS.map((u) => u.email),
     password: "password123",
     directConversationId: direct.id,
     groupConversationId: group.id,

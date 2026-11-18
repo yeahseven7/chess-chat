@@ -7,8 +7,10 @@ test.beforeEach(async ({ request }) => {
 
 test("a new user can register, land in the app, log out and log back in", async ({ page }) => {
   const username = `e2e${Date.now().toString(36)}`;
+  const email = `e2e${Date.now().toString(36)}@example.com`;
   await page.goto("/login?mode=register");
   await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Display name").fill("E2E Test User");
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
@@ -20,21 +22,21 @@ test("a new user can register, land in the app, log out and log back in", async 
   await page.waitForURL("**/login");
 
   // Log back in
-  await login(page, username);
+  await login(page, email);
   await expect(page).toHaveURL(new RegExp(`${BASE_URL.replace(/[.*]/g, "\\$&")}/app`));
 });
 
 test("login with wrong password shows an error and does not navigate", async ({ page }) => {
   await page.goto("/login");
-  await page.getByLabel("Username").fill("aisha");
+  await page.getByLabel("Email", { exact: true }).fill("aisha@chesschat.dev");
   await page.getByLabel("Password").fill("wrong-password");
   await page.locator("form").getByRole("button", { name: "Log in" }).click();
-  await expect(page.getByText("Invalid username or password")).toBeVisible();
+  await expect(page.getByText("Invalid email or password")).toBeVisible();
   await expect(page).toHaveURL(/login/);
 });
 
 test("seeded conversation shows messages with all reaction badges", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Timur Rakhimov/ }).first().click();
 
   const list = page.getByTestId("message-list");
@@ -48,7 +50,7 @@ test("seeded conversation shows messages with all reaction badges", async ({ pag
 });
 
 test("sending a message triggers automatic AI analysis and shows the badge", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Timur Rakhimov/ }).first().click();
 
   const before = await page.getByTestId("stat-total").innerText();
@@ -68,7 +70,7 @@ test("sending a message triggers automatic AI analysis and shows the badge", asy
 });
 
 test("editing a message re-analyzes and replaces the reaction", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Timur Rakhimov/ }).first().click();
 
   await page.getByRole("textbox", { name: "Message" }).fill("2 + 2 = 9");
@@ -91,7 +93,7 @@ test("editing a message re-analyzes and replaces the reaction", async ({ page })
 });
 
 test("deleting a message hides it and drops it from statistics", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Timur Rakhimov/ }).first().click();
 
   await page.getByRole("textbox", { name: "Message" }).fill("this will be deleted now");
@@ -108,7 +110,7 @@ test("deleting a message hides it and drops it from statistics", async ({ page }
 });
 
 test("statistics panel expands and collapses", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Timur Rakhimov/ }).first().click();
 
   const toggle = page.getByRole("button", { name: /Reaction Review/i });
@@ -120,7 +122,7 @@ test("statistics panel expands and collapses", async ({ page }) => {
 });
 
 test("group conversation renders members in the info panel", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Study Group/ }).first().click();
   await expect(page.getByTestId("message-list").getByText("Welcome to the study group!")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Members" })).toBeVisible();
@@ -129,7 +131,7 @@ test("group conversation renders members in the info panel", async ({ page }) =>
 
 test("mobile layout: chat opens full screen and back button returns to list", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: /Timur Rakhimov/ }).first().click();
   await expect(page.getByRole("textbox", { name: "Message" })).toBeVisible();
   await page.getByRole("button", { name: "Back to chats" }).click();

@@ -10,6 +10,7 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id uuid primary key default gen_random_uuid(),
   username text not null unique,
+  email text unique,
   display_name text not null,
   bio text not null default '',
   avatar_color text not null default '#81b64c',
@@ -19,6 +20,7 @@ create table if not exists public.profiles (
   last_seen_at timestamptz not null default now(),
   constraint username_format check (username ~ '^[A-Za-z0-9_]{3,24}$')
 );
+create unique index if not exists profiles_email_unique_idx on public.profiles (email) where email is not null;
 
 -- ── friendships ───────────────────────────────────────────────
 create table if not exists public.friendships (

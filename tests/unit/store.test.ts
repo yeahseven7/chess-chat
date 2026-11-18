@@ -11,6 +11,7 @@ async function twoUsers() {
     store.createProfile({
       id: randomUUID(),
       username: `${name}-${randomUUID().slice(0, 8)}`,
+      email: `${name.toLowerCase()}-${randomUUID().slice(0, 8)}@example.com`,
       displayName: name,
       passwordHash: hashPassword("password123"),
     });

@@ -12,6 +12,7 @@ const registerSchema = z.object({
     .min(3)
     .max(24)
     .regex(/^[A-Za-z0-9_]+$/, "Username may contain letters, digits and underscores only"),
+  email: z.string().email("Enter a valid email address").max(160),
   displayName: z.string().min(1).max(60),
   password: z.string().min(8).max(200),
 });
@@ -30,15 +31,20 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid input");
   }
-  const { username, displayName, password } = parsed.data;
+  const { username, displayName, email, password } = parsed.data;
+  const normalizedEmail = email.trim().toLowerCase();
   const store = getStore();
   if (await store.getProfileByUsername(username)) {
     return jsonError(409, "Username is already taken");
+  }
+  if (await store.getProfileByEmail(normalizedEmail)) {
+    return jsonError(409, "An account with this email already exists");
   }
   try {
     const user = await store.createProfile({
       id: randomUUID(),
       username,
+      email: normalizedEmail,
       displayName,
       passwordHash: hashPassword(password),
     });

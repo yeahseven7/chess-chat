@@ -56,18 +56,17 @@ const emptyCounts = (): CategoryCounts => ({
   blunder: 0,
 });
 
-function mapProfile(r: SqlRow): ProfileRow {
-  return {
-    id: r.id,
-    username: r.username,
-    displayName: r.display_name,
-    bio: r.bio ?? "",
-    avatarColor: r.avatar_color ?? "#81b64c",
-    avatarUrl: r.avatar_url ?? null,
-    createdAt: r.created_at,
-    lastSeenAt: r.last_seen_at,
-  };
-}
+const mapProfile = (r: SqlRow): ProfileRow => ({
+  id: r.id,
+  username: r.username,
+  email: r.email ?? null,
+  displayName: r.display_name,
+  bio: r.bio ?? "",
+  avatarColor: r.avatar_color ?? "#81b64c",
+  avatarUrl: r.avatar_url ?? null,
+  createdAt: r.created_at,
+  lastSeenAt: r.last_seen_at,
+});
 
 function mapConversation(r: SqlRow): ConversationRow {
   return {
@@ -195,6 +194,16 @@ export class LocalStore implements Store {
     }
     this.db = new DatabaseSync(dbPath);
     this.db.exec(LOCAL_SCHEMA);
+    this.migrate();
+  }
+
+  /** Idempotent column migrations for databases created before email auth. */
+  private migrate() {
+    const cols = this.all(`PRAGMA table_info(profiles)`).map((c) => String(c.name));
+    if (!cols.includes("email")) {
+      this.db.exec(`ALTER TABLE profiles ADD COLUMN email TEXT`);
+    }
+    this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email) WHERE email IS NOT NULL`);
   }
 
   close() {
@@ -218,14 +227,16 @@ export class LocalStore implements Store {
   async createProfile(input: {
     id: string;
     username: string;
+    email: string | null;
     displayName: string;
     passwordHash: string;
   }): Promise<ProfileRow> {
     this.run(
-      `INSERT INTO profiles (id, username, display_name, password_hash, created_at, last_seen_at)
-       VALUES (?,?,?,?,?,?)`,
+      `INSERT INTO profiles (id, username, email, display_name, password_hash, created_at, last_seen_at)
+       VALUES (?,?,?,?,?,?,?)`,
       input.id,
       input.username.trim(),
+      input.email?.trim().toLowerCase() ?? null,
       input.displayName.trim(),
       input.passwordHash,
       now(),
@@ -241,6 +252,11 @@ export class LocalStore implements Store {
 
   async getProfileByUsername(username: string): Promise<ProfileRow | null> {
     const r = this.one(`SELECT * FROM profiles WHERE username = ?`, username.trim());
+    return r ? mapProfile(r) : null;
+  }
+
+  async getProfileByEmail(email: string): Promise<ProfileRow | null> {
+    const r = this.one(`SELECT * FROM profiles WHERE email = ?`, email.trim().toLowerCase());
     return r ? mapProfile(r) : null;
   }
 

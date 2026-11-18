@@ -6,7 +6,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test("dana can accept timur's seeded friend request in the Friends tab", async ({ page }) => {
-  await login(page, "dana");
+  await login(page, "dana@chesschat.dev");
   await page.getByRole("button", { name: "Friends", exact: true }).click();
   await expect(page.getByText("Requests (1)")).toBeVisible();
   const accept = page.getByRole("button", { name: "Accept request" });
@@ -16,7 +16,7 @@ test("dana can accept timur's seeded friend request in the Friends tab", async (
 });
 
 test("profile page shows reaction distribution and seeded counts", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.goto("/profile/aisha");
   await expect(page.getByRole("heading", { name: "Aisha Bekova" })).toBeVisible();
   await expect(page.getByText("@aisha")).toBeVisible();
@@ -29,7 +29,7 @@ test("profile page shows reaction distribution and seeded counts", async ({ page
 });
 
 test("profile of timur shows his seeded stats to another user", async ({ page }) => {
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.goto("/profile/timur");
   await expect(page.getByRole("heading", { name: "Timur Rakhimov" })).toBeVisible();
   await expect(page.getByText("Reaction distribution")).toBeVisible();
@@ -39,8 +39,10 @@ test("notifications tab shows a badge for incoming messages", async ({ page, con
   // Bob flow: dana sends nothing yet; instead timur's seed triggers none.
   // Use the API path: register a brand-new user, message aisha, then aisha sees a notification badge.
   const username = `e2enotif${Date.now().toString(36)}`;
+  const email = `e2enotif${Date.now().toString(36)}@example.com`;
   await page.goto("/login?mode=register");
   await page.getByLabel("Username").fill(username);
+  await page.getByLabel("Email", { exact: true }).fill(email);
   await page.getByLabel("Display name").fill("Notif Trigger");
   await page.getByLabel("Password").fill("password123");
   await page.getByRole("button", { name: "Create account" }).click();
@@ -49,7 +51,7 @@ test("notifications tab shows a badge for incoming messages", async ({ page, con
   await page.waitForURL("**/login");
 
   // aisha logs in, searches the new user, sends a friend request
-  await login(page, "aisha");
+  await login(page, "aisha@chesschat.dev");
   await page.getByRole("button", { name: "New direct message" }).click();
   await page.getByLabel("Search users").fill(username);
   const modal = page.getByRole("dialog");
@@ -61,7 +63,7 @@ test("notifications tab shows a badge for incoming messages", async ({ page, con
   // the new user gets a notification on next login.
   await page.getByRole("button", { name: "Log out" }).click();
   await page.waitForURL("**/login");
-  await login(page, username);
+  await login(page, email);
   const alerts = page.getByRole("button", { name: "Alerts" });
   await expect(alerts).toContainText("1");
   await alerts.click();

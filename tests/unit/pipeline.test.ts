@@ -20,12 +20,14 @@ async function makeConversation() {
   const a = await store.createProfile({
     id: randomUUID(),
     username: `a-${randomUUID().slice(0, 8)}`,
+    email: `a-${randomUUID().slice(0, 8)}@example.com`,
     displayName: "Alice",
     passwordHash: hashPassword("password123"),
   });
   const b = await store.createProfile({
     id: randomUUID(),
     username: `b-${randomUUID().slice(0, 8)}`,
+    email: `b-${randomUUID().slice(0, 8)}@example.com`,
     displayName: "Bob",
     passwordHash: hashPassword("password123"),
   });
