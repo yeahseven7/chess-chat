@@ -38,7 +38,7 @@ export class GeminiProvider implements AIProvider {
       throw new Error("GEMINI_API_KEY is not configured (server-side env var).");
     }
     this.apiKey = apiKey;
-    this.model = model ?? process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+    this.model = model ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
   }
 
   async classify(input: ClassificationInput): Promise<ClassificationResult> {

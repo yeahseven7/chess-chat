@@ -92,7 +92,7 @@ npm run seed                    # (server must be running, ENABLE_DEV_SEED=true)
 | `SESSION_SECRET` | server | HMAC key for session cookies (required) |
 | `AI_PROVIDER` | server | `gemini` (default, real API) or `mock` (deterministic, tests) |
 | `GEMINI_API_KEY` | server | Google Gemini key — **never** expose to the client |
-| `GEMINI_MODEL` | server | Model name, default `gemini-2.0-flash` |
+| `GEMINI_MODEL` | server | Model name, default `gemini-3.5-flash-lite` |
 | `NEXT_PUBLIC_SUPABASE_URL` | public | Supabase project URL (production) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | public | Supabase anon key (public by design) |
 | `SUPABASE_SERVICE_ROLE_KEY` | server | Supabase service role — **server only** |
