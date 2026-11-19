@@ -43,6 +43,15 @@ import type {
   ProfileRow,
 } from "@/lib/server/types";
 import { useReactionRealtime } from "@/lib/client/realtime";
+import { SpringTabs } from "./motion/SpringTabs";
+import { useSidebarCollapseMotion } from "./motion/SidebarCollapse";
+import { MagneticButton } from "./motion/MagneticButton";
+import { SpringDropdown } from "./motion/SpringDropdown";
+import { WordRoll } from "./motion/WordRoll";
+import { StreamingTypingBubble } from "./motion/StreamingTypingBubble";
+import { SendStatusButton, type SendPhase } from "./motion/SendStatusButton";
+import { MentionList, mentionQuery, applyMention } from "./motion/MentionList";
+import { UserPlus, PanelLeftClose, BarChart3, ExternalLink } from "lucide-react";
 
 type SidebarTab = "chats" | "friends" | "notifications";
 
@@ -83,6 +92,9 @@ export function AppShell({ me }: { me: ProfileRow }) {
   const [pendingAttachments, setPendingAttachments] = useState<AttachmentRow[]>([]);
   const [uploading, setUploading] = useState(false);
   const [sendBusy, setSendBusy] = useState(false);
+  const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const [convFilter, setConvFilter] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [chatSearch, setChatSearch] = useState("");
@@ -94,6 +106,17 @@ export function AppShell({ me }: { me: ProfileRow }) {
   const typingSentAt = useRef(0);
   const lastMessageCount = useRef(0);
   const sendStartedAtRef = useRef(new Map<string, number>());
+  const asideRef = useRef<HTMLElement>(null);
+  const collapseArrowRef = useRef<HTMLSpanElement>(null);
+  const sidebarLabelsRef = useRef<HTMLDivElement>(null);
+
+  useSidebarCollapseMotion({
+    asideRef,
+    arrowRef: collapseArrowRef,
+    labelsRef: sidebarLabelsRef,
+    collapsed: sidebarCollapsed,
+    expandedWidth: 300,
+  });
 
   // Realtime AI reaction delivery (no-op without Supabase realtime env vars; poll covers the rest).
   // Must be called before the conditional early return of the component.
@@ -306,6 +329,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
     setPendingSends((prev) => [...prev, optimistic]);
     setComposer("");
     setSendBusy(true);
+    setSendPhase("sending");
     const attachmentsToAttach = pendingAttachments.map((a) => a.id);
     const editingTarget = editing;
     setEditing(null);
@@ -342,6 +366,8 @@ export function AppShell({ me }: { me: ProfileRow }) {
       });
       const saveMs = Math.round(performance.now() - sendStartedAt);
       console.info(`[perf] client send save=${saveMs}ms optimistic=0ms`);
+      setSendPhase("sent");
+      window.setTimeout(() => setSendPhase((p) => (p === "sent" ? "idle" : p)), 1400);
 
       // Background refresh (not awaited — reactions arrive via poll/realtime).
       void loadStats(activeId);
@@ -352,6 +378,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
       setComposer(text);
       if (pendingAttachments.length) setPendingAttachments(attachmentsToAttach.map((id) => ({ ...optimistic.attachments.find((a) => a.id === id)! })));
       console.error("[send] failed", err);
+      setSendPhase("idle");
     } finally {
       setSendBusy(false);
     }
@@ -379,6 +406,43 @@ export function AppShell({ me }: { me: ProfileRow }) {
     if (nowTs - typingSentAt.current < 2500) return;
     typingSentAt.current = nowTs;
     api(`/api/conversations/${activeId}/typing`, { method: "POST" }).catch(() => undefined);
+  }
+
+  // @mention support: the last @word in the composer opens a spring-animated picker
+  // populated with the current conversation's members.
+  const mention = mentionQuery(composer);
+  const mentionCandidates = (() => {
+    if (!mention) return [];
+    const q = mention.query.toLowerCase();
+    return (detail?.members ?? [])
+      .map((m) => m.profile)
+      .filter((p) => !q || p.displayName.toLowerCase().includes(q) || p.username.toLowerCase().includes(q))
+      .slice(0, 6);
+  })();
+
+  useEffect(() => setMentionIndex(0), [mention?.query]);
+
+  function handleMentionKey(event: React.KeyboardEvent<HTMLTextAreaElement>): boolean {
+    if (!mention || !mentionCandidates.length) return false;
+    const count = mentionCandidates.length;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setMentionIndex((i) => (i + (event.key === "ArrowDown" ? 1 : -1) + count) % count);
+      return true;
+    }
+    if (event.key === "Enter" || event.key === "Tab") {
+      event.preventDefault();
+      const person = mentionCandidates[Math.min(mentionIndex, count - 1)];
+      if (person) setComposer(applyMention(composer, person));
+      setMentionIndex(0);
+      return true;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setComposer(`${composer} `);
+      return true;
+    }
+    return false;
   }
 
   async function startDirectChat(userId: string) {
@@ -448,14 +512,14 @@ export function AppShell({ me }: { me: ProfileRow }) {
           )}
           <span className="min-w-0 flex-1">
             <span className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm font-medium text-cream-100">{name}</span>
+              <span data-collapsible-label style={{ "--label-index": 3 } as React.CSSProperties} className="truncate text-sm font-medium text-cream-100">{name}</span>
               {unread > 0 && (
                 <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-bold text-[#1b1917]">
                   {unread > 99 ? "99+" : unread}
                 </span>
               )}
             </span>
-            <span className="mt-0.5 block truncate text-[11px] text-cream-500">
+            <span data-collapsible-label style={{ "--label-index": 4 } as React.CSSProperties} className="mt-0.5 block truncate text-[11px] text-cream-500">
               {conv.lastMessage?.content ?? "Say hello 👋"}
             </span>
           </span>
@@ -468,24 +532,43 @@ export function AppShell({ me }: { me: ProfileRow }) {
     <div className="flex h-screen w-screen overflow-hidden bg-ink-800">
       {/* ── Left sidebar ─────────────────────────────────────────── */}
       <aside
-        className={`${mobileChatOpen ? "hidden" : "flex"} h-full w-full shrink-0 flex-col border-r border-ink-500 bg-ink-800 md:flex md:w-[300px] lg:w-[340px]`}
+        ref={asideRef}
+        data-collapsed={sidebarCollapsed}
+        className={`sidebar-shell ${mobileChatOpen ? "hidden" : "flex"} h-full w-full shrink-0 flex-col overflow-hidden border-r border-ink-500 bg-ink-800 md:flex md:w-[300px]`}
       >
         {/* brand + actions */}
-        <div className="flex items-center justify-between gap-2 border-b border-ink-500 px-4 py-3">
-          <Link href="/app" className="flex items-center gap-2" aria-label="ChessChat home">
-            <LogoMark size={28} />
-            <span className="text-lg font-extrabold tracking-tight text-cream-100">ChessChat</span>
-          </Link>
-          <button
-            onClick={() => setMenu("newChat")}
-            title="New direct message"
-            aria-label="New direct message"
-            className="rounded-lg border border-ink-500 p-2 text-cream-300 hover:border-accent hover:text-accent"
-          >
-            <MessageSquarePlus size={16} />
-          </button>
+        <div className="flex items-center justify-between gap-2 border-b border-ink-500 px-3 py-3">
+          {!sidebarCollapsed && (
+            <Link href="/app" className="flex items-center gap-2" aria-label="ChessChat home">
+              <LogoMark size={28} />
+              <span data-collapsible-label style={{ "--label-index": 0 } as React.CSSProperties} className="text-lg font-extrabold tracking-tight text-cream-100">ChessChat</span>
+            </Link>
+          )}
+          <div className={`flex shrink-0 items-center gap-1 ${sidebarCollapsed ? "mx-auto" : ""}`}>
+            {!sidebarCollapsed && (
+              <MagneticButton
+                ariaLabel="New direct message"
+                label="New"
+                icon={<MessageSquarePlus size={15} aria-hidden="true" />}
+                onClick={() => setMenu("newChat")}
+                className="!p-1.5"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => setSidebarCollapsed((v) => !v)}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!sidebarCollapsed}
+              className="hidden h-8 w-8 items-center justify-center rounded-lg border border-ink-500 text-cream-500 hover:text-cream-100 md:inline-flex"
+            >
+              <span ref={collapseArrowRef} className="inline-flex">
+                <PanelLeftClose size={16} aria-hidden="true" />
+              </span>
+            </button>
+          </div>
         </div>
 
+        <div ref={sidebarLabelsRef} className="flex min-h-0 flex-1 flex-col">
         {/* search conversations */}
         <div className="border-b border-ink-500 px-3 py-2">
           <div className="flex items-center gap-2 rounded-lg bg-ink-700 px-3 py-2">
@@ -500,46 +583,29 @@ export function AppShell({ me }: { me: ProfileRow }) {
           </div>
         </div>
 
-        {/* tabs */}
-        <div className="flex border-b border-ink-500 text-xs font-semibold">
-          {(
-            [
-              { id: "chats", label: "Chats", icon: MessagesSquare },
-              { id: "friends", label: "Friends", icon: Users },
-              { id: "notifications", label: "Alerts", icon: Bell },
-            ] as const
-          ).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setTab(id)}
-              aria-pressed={tab === id}
-              className={`relative flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 transition-colors ${
-                tab === id ? "text-accent" : "text-cream-500 hover:text-cream-100"
-              }`}
-            >
-              <Icon size={15} aria-hidden="true" />
-              {label}
-              {id === "notifications" && unreadNotifs > 0 && (
-                <span className="rounded-full bg-accent px-1.5 text-[9px] font-bold text-[#1b1917]">
-                  {unreadNotifs}
-                </span>
-              )}
-              {tab === id && <span className="absolute bottom-0 h-0.5 w-10 rounded-full bg-accent" />}
-            </button>
-          ))}
-        </div>
+        {/* tabs — spring pill with stretchy leading/trailing edges */}
+        <SpringTabs
+          label="Sidebar sections"
+          value={tab}
+          onChange={setTab}
+          items={[
+            { id: "chats", label: "Chats", icon: MessagesSquare },
+            { id: "friends", label: "Friends", icon: Users },
+            { id: "notifications", label: "Alerts", icon: Bell, badge: unreadNotifs },
+          ]}
+        />
 
         {/* tab content */}
         {tab === "chats" && (
           <div className="flex-1 overflow-y-auto p-2">
             <div className="mb-1 flex items-center justify-between px-2 pt-1">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-cream-600">
+              <h2 data-collapsible-label style={{ "--label-index": 1 } as React.CSSProperties} className="text-[10px] font-bold uppercase tracking-[0.15em] text-cream-600">
                 Direct messages
               </h2>
             </div>
             <ul className="space-y-0.5">{visibleDirect.map(renderConversationRow)}</ul>
             <div className="mb-1 mt-3 flex items-center justify-between px-2">
-              <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-cream-600">
+              <h2 data-collapsible-label style={{ "--label-index": 2 } as React.CSSProperties} className="text-[10px] font-bold uppercase tracking-[0.15em] text-cream-600">
                 Groups
               </h2>
               <button
@@ -578,7 +644,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
             <Link href={`/profile/${me.username}`} className="flex min-w-0 flex-1 items-center gap-2">
               <Avatar name={me.displayName} color={me.avatarColor} url={me.avatarUrl} size={36} online />
               <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold text-cream-100">{me.displayName}</span>
+                <span data-collapsible-label style={{ "--label-index": 8 } as React.CSSProperties} className="block truncate text-sm font-semibold text-cream-100">{me.displayName}</span>
                 <span className="block truncate text-[11px] text-cream-500">@{me.username}</span>
               </span>
             </Link>
@@ -589,6 +655,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
               <LogOut size={16} />
             </button>
           </div>
+        </div>
         </div>
       </aside>
 
@@ -629,7 +696,9 @@ export function AppShell({ me }: { me: ProfileRow }) {
                 />
               )}
               <div className="min-w-0 flex-1">
-                <h1 className="truncate text-sm font-bold text-cream-100">{activeName}</h1>
+                <h1 className="truncate text-sm font-bold text-cream-100">
+                  <WordRoll text={activeName} />
+                </h1>
                 <p className="text-[10px] uppercase tracking-wide text-cream-500">
                   {active.type === "group"
                     ? `${detail?.members.length ?? "…"} members`
@@ -656,6 +725,37 @@ export function AppShell({ me }: { me: ProfileRow }) {
               >
                 {rightOpen ? <PanelRightClose size={17} /> : <PanelRightOpen size={17} />}
               </button>
+              <SpringDropdown
+                label="Conversation options"
+                options={[
+                  {
+                    id: "search",
+                    label: "Search messages",
+                    icon: <Search size={15} aria-hidden="true" />,
+                    onSelect: () => setSearchOpen((v) => !v),
+                  },
+                  {
+                    id: "stats",
+                    label: "Reaction stats",
+                    icon: <BarChart3 size={15} aria-hidden="true" />,
+                    onSelect: () => setRightOpen(true),
+                  },
+                  {
+                    id: "media",
+                    label: "Shared media",
+                    icon: <ImageIcon size={15} aria-hidden="true" />,
+                    onSelect: () => setRightOpen(true),
+                  },
+                  {
+                    id: "profile",
+                    label: "View profile",
+                    icon: <ExternalLink size={15} aria-hidden="true" />,
+                    onSelect: () => {
+                      if (activeOther) router.push(`/profile/${activeOther.username}`);
+                    },
+                  },
+                ]}
+              />
             </header>
 
             {/* in-conversation search */}
@@ -722,11 +822,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
                   sending
                 />
               ))}
-              {typingNames.length > 0 && (
-                <div className="px-4 py-1 text-xs italic text-cream-500">
-                  {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing…
-                </div>
-              )}
+              {typingNames.length > 0 && <StreamingTypingBubble names={typingNames} />}
               <div ref={bottomRef} />
             </div>
 
@@ -771,8 +867,18 @@ export function AppShell({ me }: { me: ProfileRow }) {
                 e.preventDefault();
                 void send();
               }}
-              className="flex items-end gap-2 border-t border-ink-500 p-3"
+              className="relative flex items-end gap-2 border-t border-ink-500 p-3"
             >
+              {mention && mentionCandidates.length > 0 && (
+                <MentionList
+                  candidates={mentionCandidates}
+                  activeIndex={mentionIndex}
+                  onPick={(person) => {
+                    setComposer(applyMention(composer, person));
+                    setMentionIndex(0);
+                  }}
+                />
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -807,6 +913,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
                   pingTyping();
                 }}
                 onKeyDown={(e) => {
+                  if (handleMentionKey(e)) return;
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     void send();
@@ -815,15 +922,11 @@ export function AppShell({ me }: { me: ProfileRow }) {
                 placeholder={editing ? "Edit your message…" : "Type a message…"}
                 className="max-h-40 min-h-[46px] flex-1 resize-none rounded-2xl border border-ink-500 bg-ink-700 px-4 py-3 text-[15px] outline-none placeholder-cream-600 focus:border-accent"
               />
-              <button
-                type="submit"
+              <SendStatusButton
+                phase={sendPhase}
                 disabled={sendBusy || !composer.trim()}
-                aria-label="Send message"
-                title="Send"
-                className="rounded-2xl bg-accent p-3 text-[#1b1917] transition hover:bg-accent-hover disabled:opacity-40"
-              >
-                <SendHorizonal size={18} />
-              </button>
+                onClick={() => undefined}
+              />
             </form>
           </>
         )}

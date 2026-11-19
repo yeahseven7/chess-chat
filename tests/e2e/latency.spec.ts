@@ -21,7 +21,7 @@ test("sending while the provider takes 5s never blocks the conversation", async 
   await expect(composer).toHaveValue(""); // input cleared instantly
 
   // Reaction placeholder is visible while the provider is busy
-  await expect(page.getByLabel("Analysis pending").last()).toBeVisible();
+  await expect(page.getByLabel("Analyzing").last()).toBeVisible();
 
   // And the reaction arrives once analysis completes (poll-driven)
   await expect(row.getByRole("button", { name: /Great/ })).toBeVisible({ timeout: 12000 });
@@ -42,7 +42,7 @@ test("a failing provider never loses the message", async ({ page }) => {
 
   // While the job retries, the UI shows an analysis-in-progress affordance rather than nothing
   await expect(
-    page.getByLabel("Analysis pending").last()
+    page.getByLabel("Analyzing").last()
   ).toBeVisible();
 });
 

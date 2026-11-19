@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { REACTION_LIST } from "@/shared/reactions";
 import { GlyphPath } from "./ReactionGlyph";
+import { SpringExpand } from "./motion/SpringExpand";
 import type { ConversationStats } from "@/lib/server/types";
 
 interface StatsPanelProps {
@@ -14,34 +15,33 @@ interface StatsPanelProps {
 }
 
 /**
- * Signature two-column reaction statistics, modelled on a chess review screen:
- * category name · left count · symbol · right count.
+ * Reaction statistics panel — screenshot-style two-column layout.
+ * Expansion uses the Expand Card springs: the panel height opens on a spring
+ * and its rows cascade in instead of appearing all at once.
  */
 export function StatsPanel({ stats, leftName, rightName, loading }: StatsPanelProps) {
   const [open, setOpen] = useState(true);
 
   return (
-    <section
-      aria-label="Reaction statistics"
-      className="overflow-hidden rounded-xl border border-ink-500 bg-ink-700"
-    >
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between px-4 py-2.5 text-left"
-      >
-        <span className="text-xs font-bold uppercase tracking-[0.14em] text-cream-500">
-          Reaction Review
-        </span>
-        {open ? (
-          <ChevronUp size={16} className="text-cream-500" aria-hidden="true" />
-        ) : (
-          <ChevronDown size={16} className="text-cream-500" aria-hidden="true" />
+    <section aria-label="Reaction statistics" className="overflow-hidden rounded-xl border border-ink-500 bg-ink-700">
+      <SpringExpand
+        open={open}
+        header={() => (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="flex w-full items-center justify-between px-4 py-2.5 text-left"
+          >
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-cream-500">Reaction Review</span>
+            {open ? (
+              <ChevronUp size={16} className="text-cream-500" aria-hidden="true" />
+            ) : (
+              <ChevronDown size={16} className="text-cream-500" aria-hidden="true" />
+            )}
+          </button>
         )}
-      </button>
-
-      {open && (
+      >
         <div className="border-t border-ink-500 px-2 pb-3 pt-2">
           <div className="mb-1 grid grid-cols-[1fr_auto_auto_auto_1fr] items-center gap-3 px-2 text-[10px] font-semibold uppercase tracking-wide text-cream-600">
             <span className="truncate">{leftName}</span>
@@ -62,34 +62,16 @@ export function StatsPanel({ stats, leftName, rightName, loading }: StatsPanelPr
               {REACTION_LIST.map((r) => {
                 const mine = stats?.viewer[r.category] ?? 0;
                 const peers = stats?.peer[r.category] ?? 0;
-                const mineWins = mine > peers;
-                const peerWins = peers > mine;
                 return (
                   <div key={r.category} className="stats-row text-sm">
                     <span className="truncate font-medium text-cream-300">{r.label}</span>
-                    <span
-                      className={`w-8 text-right tabular-nums ${
-                        mineWins ? "font-bold text-cream-100" : "text-cream-500"
-                      }`}
-                    >
-                      {mine}
-                    </span>
-                    <span
-                      className="flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm"
-                      style={{ background: r.color }}
-                      title={r.label}
-                    >
+                    <span className={`w-8 text-right tabular-nums ${mine > peers ? "font-bold text-cream-100" : "text-cream-500"}`}>{mine}</span>
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm" style={{ background: r.color }} title={r.label}>
                       <svg width={13} height={13} viewBox="0 0 24 24" aria-hidden="true">
                         <GlyphPath glyph={r.glyph} />
                       </svg>
                     </span>
-                    <span
-                      className={`w-8 tabular-nums ${
-                        peerWins ? "font-bold text-cream-100" : "text-cream-500"
-                      }`}
-                    >
-                      {peers}
-                    </span>
+                    <span className={`w-8 tabular-nums ${peers > mine ? "font-bold text-cream-100" : "text-cream-500"}`}>{peers}</span>
                     <span />
                   </div>
                 );
@@ -106,9 +88,7 @@ export function StatsPanel({ stats, leftName, rightName, loading }: StatsPanelPr
               <div className="mt-1 flex items-center justify-between">
                 <span>Positive / negative</span>
                 <span className="tabular-nums">
-                  <span className="text-accent">{stats.positive}</span>
-                  {" / "}
-                  <span className="text-[#ff9d8f]">{stats.negative}</span>
+                  <span className="text-accent">{stats.positive}</span> / <span className="text-[#ff9d8f]">{stats.negative}</span>
                 </span>
               </div>
               {stats.mostCommon && (
@@ -120,7 +100,7 @@ export function StatsPanel({ stats, leftName, rightName, loading }: StatsPanelPr
             </div>
           )}
         </div>
-      )}
+      </SpringExpand>
     </section>
   );
 }

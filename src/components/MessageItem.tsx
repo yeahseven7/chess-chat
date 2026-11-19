@@ -8,11 +8,11 @@ import {
   RefreshCcw,
   File as FileIcon,
   Download,
-  Loader2,
 } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { Avatar } from "./Avatar";
 import { ReactionBadge } from "./ReactionBadge";
+import { GooThinking } from "./motion/GooThinking";
 import type { MessageView } from "@/lib/server/types";
 
 const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👏"];
@@ -181,13 +181,7 @@ export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChang
             ) : isOptimistic ? (
               <span className="h-[22px] w-[22px]" aria-hidden="true" />
             ) : pending ? (
-              <span
-                className="analysis-pending flex h-[22px] w-[22px] items-center justify-center rounded-full"
-                title="Analyzing…"
-                aria-label="Analysis pending"
-              >
-                <Loader2 size={12} className="animate-spin text-cream-500" />
-              </span>
+              <GooThinking />
             ) : failed ? (
               <button
                 onClick={retryAnalysis}

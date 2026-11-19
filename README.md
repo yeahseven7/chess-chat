@@ -141,6 +141,27 @@ npm run verify        # all of the above, in order
 - Reactions are playful annotations, not moderation. Use the built-in report and block tools for safety concerns.
 - See `/privacy` for the data-processing notice. AI reactions are never used to moderate, filter, or censor messages.
 
+## Motion design system
+
+Twelve animated references were integrated from `MOTION_REFERENCES.md` using a single, dependency-free React port of the reference spring engine (`src/lib/motion/`). The original stiffness/damping values are preserved (e.g. `follow 900 50`, `lead 620 36`, `trail 190 19`, `pop 520 16`) and all motion runs through one shared rAF loop that writes to DOM refs — no animation re-renders React, no extra animation libraries were installed.
+
+| Reference | Where to see it |
+|---|---|
+| Tab pill | Sidebar Chats / Friends / Alerts tabs — stretches toward the selected tab |
+| Sidebar collapse | Toggle next to "New" in the sidebar header (desktop) |
+| Spring dropdown | Conversation header → "Conversation options" (Search, Stats, Media, Profile) |
+| Magnetic button | Sidebar "New" button — lean toward cursor, springs home |
+| Mention picker | Type `@` in the composer — member list folds and highlight stretches |
+| Morph tooltip | Hover an AI reaction badge — tooltip springs to the explanation's width |
+| Goo thinking | "Analyzing…" marker while a message is still being classified |
+| Streaming reply | Typing bubble grows from a pill (real names only, no invented text) |
+| Loading → success | Composer send button: send → spinner → green "Sent" → idle |
+| Word roll | Conversation name rolls letter-by-letter when switching chats |
+| Expand card | Reaction Review statistics panel opens with a height spring + row cascade |
+| Notification stack | Alerts tab: hover/focus fans the stack out; swipe cards away (MIT port, Kokonut UI) |
+
+Every animation honours `prefers-reduced-motion`: springs snap, decorative loops stop, and touch devices get static buttons. Covered by `tests/e2e/motion.spec.ts` (10 tests) including console-error checks.
+
 ## Known limitations
 
 - **Supabase driver unverified locally** — written and typechecked, not executed against a live project (none reachable). Local driver is the verified path.

@@ -1,18 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bell, CheckCheck, UserPlus, MessageSquare, Users, Reply } from "lucide-react";
-import { api } from "@/lib/client/api";
+import NotificationStack, { type StackNotification } from "@/components/motion/NotificationStack";
 import type { NotificationRow } from "@/lib/server/types";
 
-const TYPE_ICONS: Record<string, typeof Bell> = {
-  friend_request: UserPlus,
-  friend_accepted: UserPlus,
-  message: MessageSquare,
-  group_invite: Users,
-  reply: Reply,
-};
-
+/**
+ * Notifications panel: Kokonut's Notification Stack (fan out + swipe dismiss,
+ * spring snapback) fed by real API data. Cards open their conversation.
+ */
 export function NotificationsPanel({
   onOpenConversation,
   onRead,
@@ -20,12 +15,13 @@ export function NotificationsPanel({
   onOpenConversation: (conversationId: string) => void;
   onRead: () => void;
 }) {
-  const [data, setData] = useState<{ notifications: NotificationRow[]; unread: number } | null>(null);
+  const [rows, setRows] = useState<NotificationRow[]>([]);
 
   const load = useCallback(() => {
-    api<{ notifications: NotificationRow[]; unread: number }>("/api/notifications")
-      .then(setData)
-      .catch(() => setData({ notifications: [], unread: 0 }));
+    fetch("/api/notifications", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data: { notifications: NotificationRow[] }) => setRows(data.notifications ?? []))
+      .catch(() => setRows([]));
   }, []);
 
   useEffect(() => {
@@ -35,52 +31,39 @@ export function NotificationsPanel({
   }, [load]);
 
   async function markAllRead() {
-    await api("/api/notifications/read", { method: "POST" });
+    await fetch("/api/notifications/read", { method: "POST" });
     load();
     onRead();
   }
 
+  const items: StackNotification[] = rows.map((n) => ({
+    id: n.id,
+    app: n.type,
+    title: n.title,
+    body: n.body || "Open conversation",
+    time: new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  }));
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between border-b border-ink-500 px-3 py-2">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-cream-500">Notifications</span>
+    <div className="flex-1 overflow-y-auto p-3">
+      <div className="mb-3 flex h-7 items-center justify-between px-1">
+        <p className="text-xs font-semibold text-cream-500">
+          Alerts <span className="ml-1 text-cream-600">{rows.filter((r) => !r.readAt).length} new</span>
+        </p>
         <button
           onClick={markAllRead}
-          className="flex items-center gap-1 text-[11px] font-semibold text-accent hover:underline"
+          className="text-[11px] font-semibold text-accent hover:underline"
         >
-          <CheckCheck size={13} aria-hidden="true" /> Mark all read
+          Mark all read
         </button>
       </div>
-      <ul className="flex-1 overflow-y-auto p-2">
-        {data?.notifications.map((n) => {
-          const Icon = TYPE_ICONS[n.type] ?? Bell;
-          return (
-            <li key={n.id}>
-              <button
-                onClick={() => n.conversationId && onOpenConversation(n.conversationId)}
-                className={`flex w-full items-start gap-2.5 rounded-lg p-2 text-left transition-colors ${
-                  n.readAt ? "opacity-60 hover:opacity-100" : "bg-ink-700 hover:bg-ink-600"
-                }`}
-              >
-                <span className="mt-0.5 rounded-md bg-ink-600 p-1.5 text-accent">
-                  <Icon size={14} aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-semibold text-cream-100">{n.title}</span>
-                  {n.body && <span className="mt-0.5 block truncate text-[11px] text-cream-500">{n.body}</span>}
-                  <span className="mt-0.5 block text-[9px] uppercase tracking-wide text-cream-600">
-                    {new Date(n.createdAt).toLocaleString()}
-                  </span>
-                </span>
-                {!n.readAt && <span className="mt-1.5 h-2 w-2 rounded-full bg-accent" aria-label="Unread" />}
-              </button>
-            </li>
-          );
-        })}
-        {data?.notifications.length === 0 && (
-          <li className="px-3 py-8 text-center text-xs text-cream-600">You&apos;re all caught up.</li>
-        )}
-      </ul>
+      <NotificationStack
+        notifications={items}
+        onOpen={(id) => {
+          const row = rows.find((r) => r.id === id);
+          if (row?.conversationId) onOpenConversation(row.conversationId);
+        }}
+      />
     </div>
   );
 }

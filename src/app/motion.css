@@ -1,0 +1,57 @@
+/* Motion design-system bridge.
+   Spring values live in src/lib/motion/springs.ts (ported verbatim from the
+   references' tokens.css). These CSS tokens document the same feel and keep
+   any CSS-driven motion consistent with the JS springs. */
+:root {
+  --spring-follow: 900 50;
+  --spring-settle: 280 22;
+  --spring-soft: 260 24;
+  --spring-lead: 620 36;
+  --spring-trail: 190 19;
+  --spring-pop: 520 16;
+  --spring-fade: 420 32;
+  --stagger: 45ms;
+
+  /* App palette re-used by animated components */
+  --motion-surface: #262421;
+  --motion-raised: #2e2b28;
+  --motion-fill: rgba(255, 255, 255, 0.09);
+  --motion-text: #e8e6e3;
+  --motion-muted: #a09d99;
+  --motion-accent: #81b64c;
+  --motion-green: #3d9a4e;
+  --motion-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes motion-shine {
+  to { background-position: -200% 0; }
+}
+
+@keyframes motion-caret-blink {
+  50% { opacity: 0; }
+}
+
+@keyframes motion-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Labels of the collapsible sidebar: a single opacity spring cascades through
+   each label via its --label-index threshold (port of the 40ms stagger). */
+.sidebar-shell [data-collapsible-label] {
+  opacity: clamp(0, calc((var(--label-opacity, 1) - var(--label-index, 0) * 0.09) * 6), 1);
+  transform: translateX(var(--label-x, 0px));
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-shell[data-collapsed="true"] {
+  overflow-x: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-shine,
+  .motion-caret,
+  .motion-spin {
+    animation: none !important;
+  }
+}

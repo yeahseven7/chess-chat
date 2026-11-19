@@ -7,7 +7,7 @@ test.beforeEach(async ({ request }) => {
 
 test("dana can accept timur's seeded friend request in the Friends tab", async ({ page }) => {
   await login(page, "dana@chesschat.dev");
-  await page.getByRole("button", { name: "Friends", exact: true }).click();
+  await page.getByRole("tab", { name: "Friends", exact: true }).click();
   await expect(page.getByText("Requests (1)")).toBeVisible();
   const accept = page.getByRole("button", { name: "Accept request" });
   await accept.click();
@@ -64,7 +64,7 @@ test("notifications tab shows a badge for incoming messages", async ({ page, con
   await page.getByRole("button", { name: "Log out" }).click();
   await page.waitForURL("**/login");
   await login(page, email);
-  const alerts = page.getByRole("button", { name: "Alerts" });
+  const alerts = page.getByRole("tab", { name: "Alerts" });
   await expect(alerts).toContainText("1");
   await alerts.click();
   await expect(page.getByText("New message").first()).toBeVisible();
