@@ -24,6 +24,8 @@ interface MessageItemProps {
   onReply: (m: MessageView) => void;
   onEdit: (m: MessageView) => void;
   onChanged: () => void;
+  /** Optimistic row waiting for persistence confirmation. */
+  sending?: boolean;
 }
 
 function formatTime(iso: string): string {
@@ -31,7 +33,7 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChanged }: MessageItemProps) {
+export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChanged, sending }: MessageItemProps) {
   const [busy, setBusy] = useState(false);
   const [showActions, setShowActions] = useState(false);
 
@@ -81,6 +83,7 @@ export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChang
 
   const pending = message.analysisStatus === "pending" || message.analysisStatus === "processing";
   const failed = message.analysisStatus === "failed";
+  const isOptimistic = sending === true;
 
   return (
     <div
@@ -160,6 +163,9 @@ export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChang
             <div className="mt-1 flex items-center gap-1.5 text-[9px] uppercase tracking-wide text-cream-500">
               <span>{formatTime(message.createdAt)}</span>
               {message.editedAt && <span>· edited</span>}
+              {isOptimistic && (
+                <span className="text-accent" aria-label="Sending…">· sending…</span>
+              )}
             </div>
           </div>
 
@@ -172,6 +178,8 @@ export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChang
                 reason={message.reaction.reason}
                 createdAt={message.reaction.createdAt}
               />
+            ) : isOptimistic ? (
+              <span className="h-[22px] w-[22px]" aria-hidden="true" />
             ) : pending ? (
               <span
                 className="analysis-pending flex h-[22px] w-[22px] items-center justify-center rounded-full"
@@ -216,36 +224,38 @@ export function MessageItem({ message, isMine, isGroup, onReply, onEdit, onChang
         )}
 
         {/* hover action bar */}
-        <div
-          className={`mt-1 flex items-center gap-0.5 rounded-md border border-ink-500 bg-ink-700 px-1 py-0.5 shadow transition-opacity ${
-            showActions ? "opacity-100" : "pointer-events-none opacity-0"
-          }`}
-        >
-          <button onClick={() => onReply(message)} title="Reply" aria-label="Reply" className="rounded p-1.5 text-cream-500 hover:bg-ink-600 hover:text-cream-100">
-            <Reply size={14} />
-          </button>
-          {QUICK_EMOJIS.map((e) => (
-            <button
-              key={e}
-              onClick={() => toggleEmoji(e)}
-              title={`React ${e}`}
-              aria-label={`React with ${e}`}
-              className="rounded p-1 text-xs hover:bg-ink-600"
-            >
-              {e}
+        {!isOptimistic && (
+          <div
+            className={`mt-1 flex items-center gap-0.5 rounded-md border border-ink-500 bg-ink-700 px-1 py-0.5 shadow transition-opacity ${
+              showActions ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          >
+            <button onClick={() => onReply(message)} title="Reply" aria-label="Reply" className="rounded p-1.5 text-cream-500 hover:bg-ink-600 hover:text-cream-100">
+              <Reply size={14} />
             </button>
-          ))}
-          {isMine && (
-            <>
-              <button onClick={() => onEdit(message)} title="Edit" aria-label="Edit message" className="rounded p-1.5 text-cream-500 hover:bg-ink-600 hover:text-cream-100">
-                <Pencil size={14} />
+            {QUICK_EMOJIS.map((e) => (
+              <button
+                key={e}
+                onClick={() => toggleEmoji(e)}
+                title={`React ${e}`}
+                aria-label={`React with ${e}`}
+                className="rounded p-1 text-xs hover:bg-ink-600"
+              >
+                {e}
               </button>
-              <button onClick={remove} title="Delete" aria-label="Delete message" className="rounded p-1.5 text-cream-500 hover:bg-ink-600 hover:text-[#ff9d8f]">
-                <Trash2 size={14} />
-              </button>
-            </>
-          )}
-        </div>
+            ))}
+            {isMine && (
+              <>
+                <button onClick={() => onEdit(message)} title="Edit" aria-label="Edit message" className="rounded p-1.5 text-cream-500 hover:bg-ink-600 hover:text-cream-100">
+                  <Pencil size={14} />
+                </button>
+                <button onClick={remove} title="Delete" aria-label="Delete message" className="rounded p-1.5 text-cream-500 hover:bg-ink-600 hover:text-[#ff9d8f]">
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

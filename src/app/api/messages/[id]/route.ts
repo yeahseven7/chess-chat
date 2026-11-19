@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { z } from "zod";
 import { getStore } from "@/lib/server/store";
 import { requireUser, jsonError } from "@/lib/server/http";
 import { enqueueAnalysis, processAnalysisQueue } from "@/lib/ai/pipeline";
+import { stripMockDirective } from "@/lib/ai/mock";
 
 const editSchema = z.object({ content: z.string().min(1).max(4000) });
 
@@ -21,13 +22,20 @@ export async function PATCH(
   }
   const parsed = editSchema.safeParse(body);
   if (!parsed.success) return jsonError(400, "Message must be 1–4000 characters");
+  const content =
+    (process.env.AI_PROVIDER ?? "gemini").toLowerCase() === "mock"
+      ? stripMockDirective(parsed.data.content)
+      : parsed.data.content;
+  if (!content.trim()) return jsonError(400, "Message must not be empty");
   const store = getStore();
   // Ownership is enforced inside editMessage.
-  const updated = await store.editMessage(id, user.id, parsed.data.content);
+  const updated = await store.editMessage(id, user.id, content);
   if (!updated) return jsonError(403, "You can only edit your own messages");
   // Edited content is re-analyzed (new job replaces any stale classification).
-  enqueueAnalysis(updated.id);
-  void processAnalysisQueue(3).catch(() => undefined);
+  await enqueueAnalysis(updated.id);
+  after(() => {
+    void processAnalysisQueue(5).catch(() => undefined);
+  });
   return NextResponse.json({ ok: true });
 }
 

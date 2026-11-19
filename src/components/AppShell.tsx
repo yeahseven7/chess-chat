@@ -42,6 +42,7 @@ import type {
   MessageView,
   ProfileRow,
 } from "@/lib/server/types";
+import { useReactionRealtime } from "@/lib/client/realtime";
 
 type SidebarTab = "chats" | "friends" | "notifications";
 
@@ -68,6 +69,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [messages, setMessages] = useState<MessageView[] | null>(null);
+  const [pendingSends, setPendingSends] = useState<Array<MessageView & { sendStartedAt: number }>>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [stats, setStats] = useState<ConversationStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -91,6 +93,41 @@ export function AppShell({ me }: { me: ProfileRow }) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingSentAt = useRef(0);
   const lastMessageCount = useRef(0);
+  const sendStartedAtRef = useRef(new Map<string, number>());
+
+  // Realtime AI reaction delivery (no-op without Supabase realtime env vars; poll covers the rest).
+  // Must be called before the conditional early return of the component.
+  useReactionRealtime(activeId, (event) => {
+    const startedAt = sendStartedAtRef.current.get(event.messageId);
+    if (startedAt !== undefined) {
+      console.info(`[perf] delivery messageId=${event.messageId} ${Math.round(performance.now() - startedAt)}ms`);
+      sendStartedAtRef.current.delete(event.messageId);
+    }
+    setMessages((prev) =>
+      prev
+        ? prev.map((m) =>
+            m.id === event.messageId
+              ? {
+                  ...m,
+                  analysisStatus: "completed",
+                  reaction: {
+                    messageId: event.messageId,
+                    conversationId: event.conversationId,
+                    category: event.category,
+                    confidence: event.confidence,
+                    provider: event.provider ?? "supabase-realtime",
+                    model: event.model ?? "unknown",
+                    reason: event.reason ?? "",
+                    language: event.language ?? "en",
+                    createdAt: event.createdAt,
+                    updatedAt: event.createdAt,
+                  },
+                }
+              : m
+          )
+        : prev
+    );
+  });
 
   // ── data loading ─────────────────────────────────────────────
   const loadConversations = useCallback(async () => {
@@ -190,7 +227,7 @@ export function AppShell({ me }: { me: ProfileRow }) {
       loadStats(activeId);
       loadTyping(activeId);
       markRead(activeId);
-    }, 2500);
+    }, 1500);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
@@ -240,30 +277,81 @@ export function AppShell({ me }: { me: ProfileRow }) {
     if (!activeId) return;
     const text = composer.trim();
     if (!text) return;
+    const sendStartedAt = performance.now();
+
+    // Optimistic: show the message instantly, clear the composer, hide send UI.
+    const optimisticId = `pending-${sendStartedAt}`;
+    const optimistic: MessageView & { sendStartedAt: number } = {
+      id: optimisticId,
+      conversationId: activeId,
+      senderId: me.id,
+      sender: me,
+      content: text,
+      replyToId: replyTo?.id ?? null,
+      replyTo: replyTo ?? null,
+      editedAt: null,
+      deletedAt: null,
+      analysisStatus: "pending",
+      createdAt: new Date().toISOString(),
+      reaction: null,
+      emojiReactions: [],
+      attachments: pendingAttachments.length
+        ? pendingAttachments.map((a) => ({
+            ...a,
+            messageId: optimisticId,
+          }))
+        : [],
+      sendStartedAt,
+    };
+    setPendingSends((prev) => [...prev, optimistic]);
+    setComposer("");
     setSendBusy(true);
+    const attachmentsToAttach = pendingAttachments.map((a) => a.id);
+    const editingTarget = editing;
+    setEditing(null);
+    setPendingAttachments([]);
+    setReplyTo(null);
+
     try {
-      if (editing) {
-        await api(`/api/messages/${editing.id}`, {
+      let savedMessage: MessageView;
+      if (editingTarget) {
+        await api(`/api/messages/${editingTarget.id}`, {
           method: "PATCH",
           body: JSON.stringify({ content: text }),
         });
-        setEditing(null);
+        savedMessage = { ...editingTarget, content: text, editedAt: new Date().toISOString(), analysisStatus: "pending", reaction: null };
       } else {
-        await api(`/api/conversations/${activeId}/messages`, {
+        const res = await api<{ message: MessageView }>(`/api/conversations/${activeId}/messages`, {
           method: "POST",
           body: JSON.stringify({
             content: text,
-            replyToId: replyTo?.id ?? null,
-            attachmentIds: pendingAttachments.map((a) => a.id),
+            replyToId: optimistic.replyToId,
+            attachmentIds: attachmentsToAttach,
           }),
         });
-        setReplyTo(null);
-        setPendingAttachments([]);
+        savedMessage = res.message;
       }
-      setComposer("");
-      await loadMessages(activeId, chatSearch);
-      await loadStats(activeId);
-      await loadConversations();
+
+      // Replace the optimistic row with the persisted one (identical except id + timestamps).
+      setPendingSends((prev) => prev.filter((p) => p.id !== optimisticId));
+      sendStartedAtRef.current.set(savedMessage.id, sendStartedAt);
+      setMessages((prev) => {
+        if (!prev) return prev;
+        if (prev.some((m) => m.id === savedMessage.id)) return prev;
+        return [...prev, savedMessage];
+      });
+      const saveMs = Math.round(performance.now() - sendStartedAt);
+      console.info(`[perf] client send save=${saveMs}ms optimistic=0ms`);
+
+      // Background refresh (not awaited — reactions arrive via poll/realtime).
+      void loadStats(activeId);
+      void loadConversations();
+    } catch (err) {
+      // Persistence failed: drop the optimistic row and restore the composer.
+      setPendingSends((prev) => prev.filter((p) => p.id !== optimisticId));
+      setComposer(text);
+      if (pendingAttachments.length) setPendingAttachments(attachmentsToAttach.map((id) => ({ ...optimistic.attachments.find((a) => a.id === id)! })));
+      console.error("[send] failed", err);
     } finally {
       setSendBusy(false);
     }
@@ -622,6 +710,18 @@ export function AppShell({ me }: { me: ProfileRow }) {
                   />
                 ))
               )}
+              {pendingSends.filter((p) => p.conversationId === activeId).map((p) => (
+                <MessageItem
+                  key={p.id}
+                  message={p}
+                  isMine={p.senderId === me.id}
+                  isGroup={active.type === "group"}
+                  onReply={() => undefined}
+                  onEdit={() => undefined}
+                  onChanged={() => undefined}
+                  sending
+                />
+              ))}
               {typingNames.length > 0 && (
                 <div className="px-4 py-1 text-xs italic text-cream-500">
                   {typingNames.join(", ")} {typingNames.length === 1 ? "is" : "are"} typing…

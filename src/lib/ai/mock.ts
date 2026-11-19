@@ -4,6 +4,8 @@
  * test expectations are stable and offline.
  */
 import type { AIProvider, ClassificationInput, ClassificationResult } from "./provider";
+import { ProviderError } from "./errors";
+import { nextSimulatedFailure, simulatedDelayMs } from "./simulator";
 
 const PROFANITY = [
   // English
@@ -28,18 +30,82 @@ const arithmeticRe = /(\d+)\s*([+\-*x×])\s*(\d+)\s*=\s*(-?\d+)/g;
 const MISS_OFF_TOPIC =
   /^(lol|lmao|rofl|haha|heh+|the weather|nice weather|whatever|who cares|i like (cats|dogs)|did you (see|watch)|what'?s for (lunch|dinner)|lol\.)\b/i;
 
-function detectLanguage(text: string): string {
+const detectLanguage = (text: string): string => {
   if (/[әіңғүұқөһ]/i.test(text)) return "kk";
   if (/[а-яё]/i.test(text)) return "ru";
   return "en";
+};
+
+/**
+ * Test-only directive parser. In mock mode, a message may start with
+ * [[delay:1500]] to simulate provider latency, or [[fail:429]] / [[fail:500]] /
+ * [[fail:503]] / [[fail:network]] / [[fail:timeout]] to simulate provider errors.
+ * Routes strip these directives before persistence when AI_PROVIDER=mock.
+ * Never interpreted outside mock mode.
+ */
+export interface MockDirective {
+  delayMs?: number;
+  fail?: string;
 }
+
+export function parseMockDirective(message: string): MockDirective {
+  const directive: MockDirective = {};
+  const delay = message.match(/^\[\[delay:(\d+)\]\]\s*/);
+  if (delay) directive.delayMs = Math.min(Number(delay[1]), 30_000);
+  const fail = message.match(/^\[\[fail:([0-9]{3}|network|timeout|error)\]\]\s*/);
+  if (fail) directive.fail = fail[1];
+  return directive;
+}
+
+export function stripMockDirective(message: string): string {
+  let text = message;
+  // Strip at most two leading directives (delay + fail), in any order.
+  for (let i = 0; i < 2; i++) {
+    const before = text;
+    text = text.replace(/^\[\[(delay:[0-9]+|fail:[0-9a-z]+)\]\]\s*/i, "");
+    if (text === before) break;
+  }
+  return text;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export class MockProvider implements AIProvider {
   readonly name = "mock";
   readonly model = "mock-deterministic-v1";
+  readonly fastInline = false;
 
   async classify(input: ClassificationInput): Promise<ClassificationResult> {
-    const text = input.message;
+    const directive = parseMockDirective(input.message);
+    if (directive.delayMs) {
+      await sleep(directive.delayMs);
+    }
+    if (directive.fail) {
+      const status = Number(directive.fail) || undefined;
+      throw new ProviderError(`Mock provider failure (${directive.fail})`, {
+        retryable: directive.fail === "429" || Number(directive.fail) >= 500 || directive.fail === "network",
+        status: status ?? null,
+        retryAfterMs: directive.fail === "429" ? 1500 : directive.fail === "503" ? 800 : null,
+      });
+    }
+
+    const delay = simulatedDelayMs();
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    const failure = nextSimulatedFailure();
+    if (failure === "http429") {
+      throw new ProviderError("Simulated 429 rate limit", { retryable: true, status: 429, retryAfterMs: 1000 });
+    }
+    if (failure === "http500") {
+      throw new ProviderError("Simulated 500 server error", { retryable: true, status: 500 });
+    }
+    if (failure === "http503") {
+      throw new ProviderError("Simulated 503 unavailable", { retryable: true, status: 503, retryAfterMs: 500 });
+    }
+    if (failure === "network") {
+      throw new ProviderError("Simulated network failure", { retryable: true });
+    }
+
+    const text = stripMockDirective(input.message);
     const language = detectLanguage(text);
     const done = (
       category: ClassificationResult["category"],

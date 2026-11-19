@@ -36,19 +36,19 @@ insert into public.messages (id, conversation_id, sender_id, content, analysis_s
   ('66666666-6666-6666-6666-666666666666', '55555555-5555-5555-5555-555555555551', '22222222-2222-2222-2222-222222222222', 'What the hell is this?',        'completed', now() - interval '35 minutes')
 on conflict (id) do nothing;
 
-insert into public.analysis_reactions (message_id, category, confidence, provider, model, reason, language, created_at, updated_at) values
-  ('66666666-6666-6666-6666-666666666661', 'excellent', 0.90, 'seed', 'seed-fixtures', 'Friendly greeting.',              'en', now(), now()),
-  ('66666666-6666-6666-6666-666666666662', 'best',      0.94, 'seed', 'seed-fixtures', 'Supportive or appreciative.',     'en', now(), now()),
-  ('66666666-6666-6666-6666-666666666663', 'great',     0.88, 'seed', 'seed-fixtures', 'Interesting or noteworthy.',      'en', now(), now()),
-  ('66666666-6666-6666-6666-666666666664', 'mistake',   0.95, 'seed', 'seed-fixtures', 'Arithmetic is incorrect.',        'en', now(), now()),
-  ('66666666-6666-6666-6666-666666666665', 'miss',      0.85, 'seed', 'seed-fixtures', 'Off-topic reply to a question.',  'en', now(), now()),
-  ('66666666-6666-6666-6666-666666666666', 'blunder',   0.96, 'seed', 'seed-fixtures', 'Contains profanity.',             'en', now(), now())
+insert into public.analysis_reactions (message_id, conversation_id, category, confidence, provider, model, reason, language, created_at, updated_at) values
+  ('66666666-6666-6666-6666-666666666661', '55555555-5555-5555-5555-555555555551', 'excellent', 0.90, 'seed', 'seed-fixtures', 'Friendly greeting.',              'en', now(), now()),
+  ('66666666-6666-6666-6666-666666666662', '55555555-5555-5555-5555-555555555551', 'best',      0.94, 'seed', 'seed-fixtures', 'Supportive or appreciative.',     'en', now(), now()),
+  ('66666666-6666-6666-6666-666666666663', '55555555-5555-5555-5555-555555555551', 'great',     0.88, 'seed', 'seed-fixtures', 'Interesting or noteworthy.',      'en', now(), now()),
+  ('66666666-6666-6666-6666-666666666664', '55555555-5555-5555-5555-555555555551', 'mistake',   0.95, 'seed', 'seed-fixtures', 'Arithmetic is incorrect.',        'en', now(), now()),
+  ('66666666-6666-6666-6666-666666666665', '55555555-5555-5555-5555-555555555551', 'miss',      0.85, 'seed', 'seed-fixtures', 'Off-topic reply to a question.',  'en', now(), now()),
+  ('66666666-6666-6666-6666-666666666666', '55555555-5555-5555-5555-555555555551', 'blunder',   0.96, 'seed', 'seed-fixtures', 'Contains profanity.',             'en', now(), now())
 on conflict (message_id) do nothing;
 
 insert into public.messages (id, conversation_id, sender_id, content, analysis_status, created_at) values
   ('66666666-6666-6666-6666-666666666667', '55555555-5555-5555-5555-555555555552', '11111111-1111-1111-1111-111111111111', 'Welcome to the study group!', 'completed', now() - interval '30 minutes')
 on conflict (id) do nothing;
 
-insert into public.analysis_reactions (message_id, category, confidence, provider, model, reason, language, created_at, updated_at) values
-  ('66666666-6666-6666-6666-666666666667', 'excellent', 0.90, 'seed', 'seed-fixtures', 'Friendly greeting.', 'en', now(), now())
+insert into public.analysis_reactions (message_id, conversation_id, category, confidence, provider, model, reason, language, created_at, updated_at) values
+  ('66666666-6666-6666-6666-666666666667', '55555555-5555-5555-5555-555555555552', 'excellent', 0.90, 'seed', 'seed-fixtures', 'Friendly greeting.', 'en', now(), now())
 on conflict (message_id) do nothing;

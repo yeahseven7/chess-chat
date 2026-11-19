@@ -97,6 +97,7 @@ const mapAttachment = (r: Row): AttachmentRow => ({
 });
 const mapReaction = (r: Row): ReactionRow => ({
   messageId: r.message_id,
+  conversationId: r.conversation_id ?? "",
   category: r.category,
   confidence: Number(r.confidence),
   provider: r.provider,
@@ -697,7 +698,18 @@ export class SupabaseStore implements Store {
     const id = newId();
     const { error } = await this.db.from("analysis_jobs")
       .insert({ id, message_id: messageId, status: "pending", attempts: 0, max_attempts: 4, run_at: now(), created_at: now(), updated_at: now() });
-    if (!error) return { jobId: id, created: true };
+    if (!error) {
+      // Best-effort pgmq wake-up signal; table scan remains the guaranteed path.
+      try {
+        const { data } = await this.db.rpc("message_analysis_send", { payload: { job_id: id, message_id: messageId } });
+        if (typeof data === "number") {
+          await this.db.from("analysis_jobs").update({ pgmq_msg_id: data }).eq("id", id);
+        }
+      } catch {
+        // queue may be absent — ignore, table-based recovery covers it
+      }
+      return { jobId: id, created: true };
+    }
     // Unique partial index violation → an active job already exists (deduped).
     const { data } = await this.db.from("analysis_jobs").select("id").eq("message_id", messageId).in("status", ["pending", "processing"]).limit(1).maybeSingle();
     return { jobId: data?.id ?? id, created: false };
@@ -724,17 +736,44 @@ export class SupabaseStore implements Store {
   }
 
   async completeJob(jobId: string, messageId: string): Promise<void> {
+    const { data: job } = await this.db.from("analysis_jobs").select("pgmq_msg_id").eq("id", jobId).maybeSingle();
     await this.db.from("analysis_jobs").update({ status: "completed", updated_at: now() }).eq("id", jobId);
     await this.db.from("messages").update({ analysis_status: "completed" }).eq("id", messageId);
+    // Best-effort pgmq acknowledge
+    if (job?.pgmq_msg_id != null) {
+      try {
+        await this.db.rpc("message_analysis_delete", { msg_id: job.pgmq_msg_id });
+      } catch {
+        // janitor/table fallback covers this
+      }
+    }
+    // Reaction broadcast is emitted by the pipeline (metadata only, per-conversation channel).
+  }
+
+  async recoverStuckJobs(staleSeconds = 120): Promise<number> {
+    const cutoff =
+      staleSeconds === 0 ? "9999-12-31T23:59:59.999Z" : new Date(Date.now() - staleSeconds * 1000).toISOString();
+    const { data } = await this.db.from("analysis_jobs")
+      .update({ status: "pending", updated_at: now() })
+      .eq("status", "processing")
+      .lt("updated_at", cutoff)
+      .select("message_id");
+    const recovered = data?.length ?? 0;
+    if (recovered > 0) {
+      const messageIds = (data ?? []).map((r) => r.message_id as string);
+      await this.db.from("messages").update({ analysis_status: "pending" }).in("id", messageIds);
+    }
+    return recovered;
   }
 
   async failOrRetryJob(
     job: AnalysisJobRow,
     error: string,
-    retryDelaySeconds: (attempt: number) => number
+    retryDelaySeconds: (attempt: number) => number,
+    forceFailed = false
   ): Promise<"retry" | "failed"> {
     const trimmed = error.slice(0, 500);
-    if (job.attempts >= job.maxAttempts) {
+    if (forceFailed || job.attempts >= job.maxAttempts) {
       await this.db.from("analysis_jobs").update({ status: "failed", last_error: trimmed, updated_at: now() }).eq("id", job.id);
       await this.db.from("messages").update({ analysis_status: "failed" }).eq("id", job.messageId);
       return "failed";
@@ -765,10 +804,15 @@ export class SupabaseStore implements Store {
 
   async upsertReaction(
     messageId: string,
-    reaction: Omit<ReactionRow, "messageId" | "createdAt" | "updatedAt">
+    reaction: Omit<ReactionRow, "messageId" | "conversationId" | "createdAt" | "updatedAt">
   ): Promise<void> {
+    // Denormalize conversation_id on the reaction row so Supabase Realtime can
+    // filter updates per conversation without joins.
+    const { data: msg } = await this.db.from("messages").select("conversation_id").eq("id", messageId).maybeSingle();
+    const conversationId = msg?.conversation_id ?? null;
     await this.db.from("analysis_reactions").upsert({
       message_id: messageId,
+      conversation_id: conversationId,
       category: reaction.category,
       confidence: reaction.confidence,
       provider: reaction.provider,

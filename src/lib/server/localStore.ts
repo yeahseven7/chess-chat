@@ -121,6 +121,7 @@ function mapAttachment(r: SqlRow): AttachmentRow {
 function mapReaction(r: SqlRow): ReactionRow {
   return {
     messageId: r.message_id,
+    conversationId: r.conversation_id ?? "",
     category: r.category,
     confidence: Number(r.confidence),
     provider: r.provider,
@@ -197,13 +198,20 @@ export class LocalStore implements Store {
     this.migrate();
   }
 
-  /** Idempotent column migrations for databases created before email auth. */
+  /** Idempotent column migrations for databases created before email/auth/realtime changes. */
   private migrate() {
-    const cols = this.all(`PRAGMA table_info(profiles)`).map((c) => String(c.name));
-    if (!cols.includes("email")) {
+    const profileCols = this.all(`PRAGMA table_info(profiles)`).map((c) => String(c.name));
+    if (!profileCols.includes("email")) {
       this.db.exec(`ALTER TABLE profiles ADD COLUMN email TEXT`);
     }
     this.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email) WHERE email IS NOT NULL`);
+
+    const reactionCols = this.all(`PRAGMA table_info(analysis_reactions)`).map((c) => String(c.name));
+    if (!reactionCols.includes("conversation_id")) {
+      this.db.exec(`ALTER TABLE analysis_reactions ADD COLUMN conversation_id TEXT NOT NULL DEFAULT ''`);
+      this.run(`UPDATE analysis_reactions SET conversation_id = (SELECT conversation_id FROM messages WHERE messages.id = analysis_reactions.message_id) WHERE conversation_id = ''`);
+    }
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_reactions_conversation ON analysis_reactions(conversation_id)`);
   }
 
   close() {
@@ -959,13 +967,34 @@ export class LocalStore implements Store {
     this.run(`UPDATE messages SET analysis_status = 'completed' WHERE id = ?`, messageId);
   }
 
+  async recoverStuckJobs(staleSeconds = 120): Promise<number> {
+    const ts = now();
+    const cutoff =
+      staleSeconds === 0 ? "9999-12-31T23:59:59.999Z" : new Date(Date.now() - staleSeconds * 1000).toISOString();
+    const res = this.run(
+      `UPDATE analysis_jobs SET status = 'pending', updated_at = ?
+       WHERE status = 'processing' AND updated_at < ?`,
+      ts,
+      cutoff
+    );
+    if (res.changes > 0) {
+      this.run(
+        `UPDATE messages SET analysis_status = 'pending'
+         WHERE id IN (SELECT message_id FROM analysis_jobs WHERE status = 'pending' AND updated_at = ?)`,
+        ts
+      );
+    }
+    return res.changes;
+  }
+
   async failOrRetryJob(
     job: AnalysisJobRow,
     error: string,
-    retryDelaySeconds: (attempt: number) => number
+    retryDelaySeconds: (attempt: number) => number,
+    forceFailed = false
   ): Promise<"retry" | "failed"> {
     const trimmed = error.slice(0, 500);
-    if (job.attempts >= job.maxAttempts) {
+    if (forceFailed || job.attempts >= job.maxAttempts) {
       this.run(
         `UPDATE analysis_jobs SET status = 'failed', last_error = ?, updated_at = ? WHERE id = ?`,
         trimmed,
@@ -1012,13 +1041,18 @@ export class LocalStore implements Store {
 
   async upsertReaction(
     messageId: string,
-    reaction: Omit<ReactionRow, "messageId" | "createdAt" | "updatedAt">
+    reaction: Omit<ReactionRow, "messageId" | "conversationId" | "createdAt" | "updatedAt">
   ): Promise<void> {
     const ts = now();
+    // Denormalize conversation_id on the reaction row so Supabase Realtime can
+    // filter updates per conversation without joins.
+    const conv = this.one(`SELECT conversation_id FROM messages WHERE id = ?`, messageId);
+    const conversationId = conv?.conversation_id ?? null;
     this.run(
-      `INSERT INTO analysis_reactions (message_id, category, confidence, provider, model, reason, language, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?,?)
+      `INSERT INTO analysis_reactions (message_id, conversation_id, category, confidence, provider, model, reason, language, created_at, updated_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(message_id) DO UPDATE SET
+         conversation_id = excluded.conversation_id,
          category = excluded.category,
          confidence = excluded.confidence,
          provider = excluded.provider,
@@ -1027,6 +1061,7 @@ export class LocalStore implements Store {
          language = excluded.language,
          updated_at = excluded.updated_at`,
       messageId,
+      conversationId,
       reaction.category,
       reaction.confidence,
       reaction.provider,

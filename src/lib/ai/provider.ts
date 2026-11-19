@@ -17,5 +17,7 @@ export interface ClassificationResult extends Classification {
 export interface AIProvider {
   readonly name: string;
   readonly model: string;
+  /** When false (slow providers, tests), the send path uses the pusher loop instead of an inline worker. */
+  readonly fastInline: boolean;
   classify(input: ClassificationInput): Promise<ClassificationResult>;
 }

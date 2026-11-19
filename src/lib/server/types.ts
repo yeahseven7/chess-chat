@@ -72,6 +72,7 @@ export interface AttachmentRow {
 
 export interface ReactionRow {
   messageId: string;
+  conversationId: string;
   category: string;
   confidence: number;
   provider: string;
@@ -274,16 +275,19 @@ export interface Store {
   enqueueAnalysisJob(messageId: string): Promise<{ jobId: string; created: boolean }>;
   claimDueJobs(limit: number): Promise<AnalysisJobRow[]>;
   completeJob(jobId: string, messageId: string): Promise<void>;
+  /** Reset `processing` jobs older than `staleSeconds` back to `pending`. */
+  recoverStuckJobs(staleSeconds?: number): Promise<number>;
   failOrRetryJob(
     job: AnalysisJobRow,
     error: string,
-    retryDelaySeconds: (attempt: number) => number
+    retryDelaySeconds: (attempt: number) => number,
+    forceFailed?: boolean
   ): Promise<"retry" | "failed">;
   getAnalysisJobForMessage(messageId: string): Promise<AnalysisJobRow | null>;
   requeueFailedJob(messageId: string): Promise<boolean>;
   upsertReaction(
     messageId: string,
-    reaction: Omit<ReactionRow, "messageId" | "createdAt" | "updatedAt">
+    reaction: Omit<ReactionRow, "messageId" | "conversationId" | "createdAt" | "updatedAt">
   ): Promise<void>;
   getMessageForAnalysis(
     messageId: string

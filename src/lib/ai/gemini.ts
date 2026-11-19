@@ -5,6 +5,7 @@
  */
 import type { AIProvider, ClassificationInput, ClassificationResult } from "./provider";
 import { extractJson, parseClassification } from "./schema";
+import { ProviderError, parseRetryAfter } from "./errors";
 
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -31,11 +32,15 @@ Return ONLY a JSON object: {"category": one of great|best|excellent|mistake|miss
 export class GeminiProvider implements AIProvider {
   readonly name = "gemini";
   readonly model: string;
+  /** Fast model — safe to drain inline after persisting a message. */
+  readonly fastInline = true;
   private readonly apiKey: string;
 
   constructor(apiKey: string | undefined, model?: string) {
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not configured (server-side env var).");
+      throw new ProviderError("GEMINI_API_KEY is not configured (server-side env var).", {
+        retryable: false,
+      });
     }
     this.apiKey = apiKey;
     this.model = model ?? process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
@@ -52,26 +57,45 @@ export class GeminiProvider implements AIProvider {
     const prompt = `${SYSTEM_PROMPT}\n\nRecent conversation context (oldest to newest):\n${contextBlock}\n\nMessage to classify (author: ${input.authorName}):\n"""${input.message}"""\n\nRespond with only the JSON object.`;
 
     const url = `${GEMINI_ENDPOINT}/${encodeURIComponent(this.model)}:generateContent`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": this.apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          maxOutputTokens: 256,
-          temperature: 0.1,
+    const startedAt = performance.now();
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": this.apiKey,
         },
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            maxOutputTokens: 256,
+            temperature: 0.1,
+            thinkingConfig: { thinkingBudget: 0 }, // single-label task — no reasoning budget
+          },
+          tools: [], // classification never needs web search / function calling
+        }),
+        signal: AbortSignal.timeout(Number(process.env.GEMINI_TIMEOUT_MS ?? 8_000)),
+      });
+    } catch (error) {
+      const isTimeout =
+        error instanceof Error && /timeout|abort/i.test(error.message + error.name);
+      throw new ProviderError(
+        isTimeout ? "Gemini request timed out" : "Gemini network error",
+        { retryable: true }
+      );
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new Error(`Gemini API error ${res.status}: ${body.slice(0, 200)}`);
+      const retryAfterMs = parseRetryAfter(res.headers.get("retry-after"));
+      const retryable = res.status === 429 || res.status >= 500;
+      throw new ProviderError(`Gemini API error ${res.status}: ${body.slice(0, 200)}`, {
+        retryable,
+        status: res.status,
+        retryAfterMs,
+      });
     }
 
     const data = (await res.json()) as {
@@ -81,6 +105,11 @@ export class GeminiProvider implements AIProvider {
     if (!text) throw new Error("Gemini returned an empty response");
 
     const parsed = parseClassification(extractJson(text));
+    const ms = Math.round(performance.now() - startedAt);
+    performance.mark("gemini:complete");
+    console.error(
+      `[perf] gemini classify model=${this.model} chars=${input.message.length} context=${input.context.length} ${ms}ms`
+    );
     return { ...parsed, provider: this.name, model: this.model };
   }
 }

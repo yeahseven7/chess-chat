@@ -1,10 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { getStore } from "@/lib/server/store";
 import { requireUser, jsonError } from "@/lib/server/http";
-import { kickOffAnalysis, processAnalysisQueue } from "@/lib/ai/pipeline";
+import { enqueueAnalysis, processAnalysisQueue } from "@/lib/ai/pipeline";
+import { stripMockDirective } from "@/lib/ai/mock";
 import { rateLimit } from "@/lib/server/rateLimit";
+
+const stripIfMock = (content: string): string =>
+  (process.env.AI_PROVIDER ?? "gemini").toLowerCase() === "mock" ? stripMockDirective(content) : content;
 
 export async function GET(
   request: NextRequest,
@@ -18,12 +22,15 @@ export async function GET(
     return jsonError(404, "Conversation not found");
   }
   const url = request.nextUrl;
-  const after = url.searchParams.get("after") ?? undefined;
+  const afterCursor = url.searchParams.get("after") ?? undefined;
   const q = url.searchParams.get("q") ?? undefined;
   const limit = Number(url.searchParams.get("limit") ?? "100");
   // Opportunistically drain due analysis jobs so reactions appear promptly.
-  void processAnalysisQueue(3).catch(() => undefined);
-  const messages = await store.listMessages(id, user.id, { after, limit, query: q ?? undefined });
+  // (after() — runs after the response flushes; GET stays hot.)
+  after(() => {
+    void processAnalysisQueue(3).catch(() => undefined);
+  });
+  const messages = await store.listMessages(id, user.id, { after: afterCursor, limit, query: q ?? undefined });
   return NextResponse.json({ messages });
 }
 
@@ -52,9 +59,13 @@ export async function POST(
   const parsed = sendSchema.safeParse(body);
   if (!parsed.success) return jsonError(400, "Message must be 1–4000 characters");
 
+  const startedAt = performance.now();
   const store = getStore();
   const conversation = await store.getConversationForUser(id, user.id);
   if (!conversation) return jsonError(404, "Conversation not found");
+
+  const content = stripIfMock(parsed.data.content);
+  if (!content.trim()) return jsonError(400, "Message must not be empty");
 
   if (conversation.type === "direct") {
     const members = await store.listMembers(id);
@@ -68,14 +79,28 @@ export async function POST(
     id: randomUUID(),
     conversationId: id,
     senderId: user.id,
-    content: parsed.data.content,
+    content,
     replyToId: parsed.data.replyToId ?? null,
     attachmentIds: parsed.data.attachmentIds ?? [],
   });
   if (!message) return jsonError(500, "Could not save the message");
 
-  // Delivery must not wait for AI: enqueue + async drain.
-  kickOffAnalysis(message.id);
+  const persistMs = Math.round(performance.now() - startedAt);
 
+  // Enqueue the AI analysis job and kick off a background drain. Neither
+  // awaits the provider: the send response returns immediately after this.
+  const enqueueStart = performance.now();
+  const { created } = await enqueueAnalysis(message.id);
+  const enqueueMs = Math.round(performance.now() - enqueueStart);
+  // Run the drain AFTER the response has flushed — never inline in the send path.
+  after(() => {
+    void processAnalysisQueue(5).catch((err) =>
+      console.error("[analysis] background drain failed", err instanceof Error ? err.message : err)
+    );
+  });
+
+  console.error(
+    `[perf] send persist conv=${id} messageId=${message.id} bytes=${parsed.data.content.length} persist=${persistMs}ms enqueue=${enqueueMs}ms`
+  );
   return NextResponse.json({ message }, { status: 201 });
 }

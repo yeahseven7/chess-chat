@@ -100,6 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_attachments_message ON attachments(message_id);
 
 CREATE TABLE IF NOT EXISTS analysis_reactions (
   message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+  conversation_id TEXT NOT NULL DEFAULT '',
   category TEXT NOT NULL CHECK (category IN ('great','best','excellent','mistake','miss','blunder')),
   confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
   provider TEXT NOT NULL,

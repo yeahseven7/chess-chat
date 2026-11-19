@@ -108,6 +108,7 @@ create index if not exists attachments_message_idx on public.attachments (messag
 -- ── AI analysis reactions (the six categories) ────────────────
 create table if not exists public.analysis_reactions (
   message_id uuid primary key references public.messages(id) on delete cascade,
+  conversation_id uuid not null,
   category text not null check (category in ('great','best','excellent','mistake','miss','blunder')),
   confidence real not null check (confidence >= 0 and confidence <= 1),
   provider text not null,
@@ -119,6 +120,7 @@ create table if not exists public.analysis_reactions (
 );
 create index if not exists reactions_category_idx on public.analysis_reactions (category);
 create index if not exists reactions_provider_idx on public.analysis_reactions (provider);
+create index if not exists reactions_conversation_idx on public.analysis_reactions (conversation_id);
 
 -- ── manual emoji reactions ────────────────────────────────────
 create table if not exists public.emoji_reactions (
